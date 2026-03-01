@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PC Remote">
+  <link rel="manifest" href="/manifest.json">
+  <title>PC Remote</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+    body {
+      font-family: sans-serif;
+      background: #111;
+      color: #fff;
+      text-align: center;
+      padding: 16px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    h2 { margin-bottom: 12px; font-size: 20px; }
+    h3 { margin: 14px 0 8px; font-size: 16px; color: #aaa; }
+
+    #trackpad {
+      width: 100%;
+      height: 260px;
+      background: #1a1a1a;
+      border: 2px solid #2a2a2a;
+      border-radius: 20px;
+      margin: 10px 0;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-size: 13px;
+      position: relative;
+    }
+
+    #status-dot {
+      position: absolute;
+      top: 10px; right: 12px;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #e74c3c;
+    }
+    #status-dot.connected { background: #2ecc71; }
+
+    #gesture-hint {
+      position: absolute;
+      bottom: 10px;
+      left: 0; right: 0;
+      font-size: 11px;
+      color: #333;
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 8px 0;
+    }
+
+    button {
+      width: 72px;
+      height: 56px;
+      font-size: 22px;
+      border-radius: 14px;
+      background: #2a2a2a;
+      color: #fff;
+      border: 1px solid #3a3a3a;
+      cursor: pointer;
+      transition: background 0.08s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button:active { background: #555; }
+    .wide-btn { width: 130px; }
+
+    .scroll-btn {
+      width: 100px;
+      height: 56px;
+      font-size: 22px;
+      border-radius: 14px;
+      background: #2a2a2a;
+      color: #fff;
+      border: 1px solid #3a3a3a;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .scroll-btn:active { background: #555; }
+
+    #audio-btn {
+      width: 100%;
+      height: 52px;
+      font-size: 16px;
+      border-radius: 14px;
+      background: #1a3a1a;
+      border: 1px solid #2a5a2a;
+      color: #2ecc71;
+      margin: 4px 0;
+      transition: all 0.2s;
+    }
+    #audio-btn.streaming {
+      background: #3a1a1a;
+      border-color: #7a2a2a;
+      color: #e74c3c;
+    }
+
+    #shutdown-btn {
+      width: 100%;
+      height: 52px;
+      font-size: 16px;
+      border-radius: 14px;
+      background: #3a1a1a;
+      border: 1px solid #7a2a2a;
+      color: #e74c3c;
+      margin: 4px 0;
+      transition: all 0.2s;
+    }
+    #shutdown-btn:active { background: #5a2a2a; }
+
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: #222;
+      margin: 14px 0;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin: 8px 0;
+      font-size: 13px;
+      color: #888;
+    }
+    input[type=range] {
+      width: 150px;
+      accent-color: #4a9eff;
+    }
+
+    #debug {
+      margin-top: 16px;
+      padding: 10px;
+      background: #1a1a1a;
+      border-radius: 10px;
+      font-size: 11px;
+      color: #0f0;
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-all;
+      min-height: 60px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🖥️ PC Remote</h2>
+
+  <button id="audio-btn" onclick="toggleAudio()">🔈 Stream PC Audio</button>
+
+  <!-- Trackpad -->
+  <div id="trackpad">
+    <span id="pad-hint">slide • tap • hold • 2-finger scroll</span>
+    <div id="status-dot"></div>
+    <div id="gesture-hint">tap=click • double tap=open • hold=right click</div>
+  </div>
+
+  <!-- Cursor Speed -->
+  <div class="slider-row">
+    <span>🐢</span>
+    <input type="range" id="sensitivity" min="0.5" max="6" step="0.1" value="2.5">
+    <span>🐇</span>
+    <span id="sens-val">2.5×</span>
+  </div>
+
+  <!-- Mouse Buttons -->
+  <div class="btn-row">
+    <button class="wide-btn" onclick="doClick('left')">🖱️ Click</button>
+    <button class="wide-btn" onclick="doClick('right')">R-Click</button>
+  </div>
+
+  <!-- Scroll Buttons -->
+  <div class="btn-row">
+    <button class="scroll-btn"
+      ontouchstart="startScroll(1)" ontouchend="stopScroll()"
+      onmousedown="startScroll(1)" onmouseup="stopScroll()">⬆️ Scroll</button>
+    <button class="scroll-btn"
+      ontouchstart="startScroll(-1)" ontouchend="stopScroll()"
+      onmousedown="startScroll(-1)" onmouseup="stopScroll()">⬇️ Scroll</button>
+  </div>
+
+  <!-- Scroll Speed -->
+  <div class="slider-row">
+    <span>🐢</span>
+    <input type="range" id="scroll-speed" min="1" max="200" step="1" value="8">
+    <span>🐇</span>
+    <span id="scroll-val">8</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Media -->
+  <h3>🎵 Media</h3>
+  <div class="btn-row">
+    <button onclick="media('prev')">⏮</button>
+    <button onclick="media('play')">⏯</button>
+    <button onclick="media('next')">⏭</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Volume -->
+  <h3>🔊 Volume</h3>
+  <div class="btn-row">
+    <button onclick="media('vol_down')">🔉</button>
+    <button onclick="media('mute')">🔇</button>
+    <button onclick="media('vol_up')">🔊</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- System -->
+  <h3>⚙️ System</h3>
+  <button id="shutdown-btn" onclick="confirmShutdown()">⏻ Shutdown PC</button>
+
+  <div id="debug">Debug log:</div>
+
+  <script>
+    const BASE_HTTP = 'http://192.168.1.111:5000';
+    const BASE_WS   = 'ws://192.168.1.111:5000';
+
+    function log(msg) {
+      const d = document.getElementById('debug');
+      d.innerText += '\n' + msg;
+    }
+
+    // --- Wake Lock ---
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } else {
+          noSleepFallback();
+        }
+      } catch (err) { noSleepFallback(); }
+    }
+    function noSleepFallback() {
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('muted', '');
+      video.setAttribute('loop', '');
+      video.style.cssText = 'position:fixed;opacity:0;width:1px;height:1px';
+      video.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28ybXA0MQAAAAhmcmVlAAAAG21kYXQAAAAA';
+      document.body.appendChild(video);
+      video.play().catch(() => {});
+    }
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible') await requestWakeLock();
+    });
+    document.addEventListener('touchstart', function acquireOnTouch() {
+      requestWakeLock();
+      document.removeEventListener('touchstart', acquireOnTouch);
+    }, { once: true });
+    requestWakeLock();
+
+    // --- HTTP ---
+    function httpPost(path, data) {
+      fetch(BASE_HTTP + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).catch(() => {});
+    }
+    function doClick(btn) { httpPost('/mouse/click', { button: btn }); }
+    function media(action) { httpPost('/media/' + action, {}); }
+
+    // --- Shutdown ---
+    function confirmShutdown() {
+      if (confirm('⚠️ Shutdown PC in 5 seconds?')) {
+        httpPost('/system/shutdown', {});
+        const btn = document.getElementById('shutdown-btn');
+        btn.textContent = '✅ Shutting down... (tap to cancel)';
+        btn.onclick = cancelShutdown;
+      }
+    }
+    function cancelShutdown() {
+      httpPost('/system/cancel_shutdown', {});
+      const btn = document.getElementById('shutdown-btn');
+      btn.textContent = '⏻ Shutdown PC';
+      btn.onclick = confirmShutdown;
+    }
+
+    // --- Scroll speed ---
+    const scrollSlider = document.getElementById('scroll-speed');
+    const scrollVal = document.getElementById('scroll-val');
+    scrollSlider.addEventListener('input', () => {
+      scrollVal.innerText = scrollSlider.value;
+    });
+    function getScrollAmt(dir) {
+      return parseInt(scrollSlider.value) * dir;
+    }
+
+    // --- Hold to scroll ---
+    let scrollInterval = null;
+    function startScroll(dir) {
+      const amt = getScrollAmt(dir);
+      httpPost('/mouse/scroll', { amount: amt });
+      scrollInterval = setInterval(() => {
+        httpPost('/mouse/scroll', { amount: getScrollAmt(dir) });
+      }, 80);
+    }
+    function stopScroll() {
+      clearInterval(scrollInterval);
+      scrollInterval = null;
+    }
+
+    // --- Mouse WebSocket ---
+    let ws = null;
+    const dot = document.getElementById('status-dot');
+    function connectWS() {
+      ws = new WebSocket(BASE_WS + '/ws/mouse');
+      ws.onopen = () => {
+        dot.classList.add('connected');
+        document.getElementById('pad-hint').innerText = '';
+      };
+      ws.onclose = () => {
+        dot.classList.remove('connected');
+        setTimeout(connectWS, 1500);
+      };
+      ws.onerror = () => ws.close();
+    }
+    connectWS();
+
+    // --- Trackpad with gestures ---
+    let lastX = null, lastY = null;
+    let pendingDx = 0, pendingDy = 0;
+    let rafPending = false;
+    let tapTimer = null;
+    let longPressTimer = null;
+    let tapCount = 0;
+    let touchMoved = false;
+
+    const LONG_PRESS_MS = 500;
+    const DOUBLE_TAP_MS = 300;
+    const MOVE_THRESHOLD = 5;
+
+    const pad = document.getElementById('trackpad');
+    const sensSlider = document.getElementById('sensitivity');
+    const sensVal = document.getElementById('sens-val');
+
+    sensSlider.addEventListener('input', () => {
+      sensVal.innerText = parseFloat(sensSlider.value).toFixed(1) + '×';
+    });
+
+    pad.addEventListener('touchstart', e => {
+      e.preventDefault();
+
+      if (e.touches.length === 2) {
+        clearTimeout(longPressTimer);
+        lastY = e.touches[0].clientY - e.touches[1].clientY;
+        return;
+      }
+
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+      pendingDx = 0; pendingDy = 0;
+      touchMoved = false;
+
+      longPressTimer = setTimeout(() => {
+        if (!touchMoved) {
+          httpPost('/mouse/click', { button: 'right' });
+          navigator.vibrate && navigator.vibrate(40);
+        }
+      }, LONG_PRESS_MS);
+
+    }, { passive: false });
+
+    pad.addEventListener('touchmove', e => {
+      e.preventDefault();
+
+      if (e.touches.length === 2) {
+        clearTimeout(longPressTimer);
+        const delta = e.touches[0].clientY - e.touches[1].clientY;
+        const diff = delta - lastY;
+        if (Math.abs(diff) > 2) {
+          const spd = parseInt(scrollSlider.value);
+          httpPost('/mouse/scroll', { amount: Math.round(-diff / 3) * (spd / 8) });
+        }
+        lastY = delta;
+        return;
+      }
+
+      const dx = e.touches[0].clientX - lastX;
+      const dy = e.touches[0].clientY - lastY;
+
+      if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
+        touchMoved = true;
+        clearTimeout(longPressTimer);
+      }
+
+      const sens = parseFloat(sensSlider.value);
+      pendingDx += dx * sens;
+      pendingDy += dy * sens;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+
+      if (!rafPending) { rafPending = true; requestAnimationFrame(flushMove); }
+    }, { passive: false });
+
+    pad.addEventListener('touchend', e => {
+      e.preventDefault();
+      clearTimeout(longPressTimer);
+      flushMove();
+
+      if (!touchMoved && e.touches.length === 0) {
+        tapCount++;
+        if (tapCount === 1) {
+          tapTimer = setTimeout(() => {
+            if (tapCount === 1) {
+              httpPost('/mouse/click', { button: 'left' });
+            }
+            tapCount = 0;
+          }, DOUBLE_TAP_MS);
+        } else if (tapCount === 2) {
+          clearTimeout(tapTimer);
+          tapCount = 0;
+          httpPost('/mouse/doubleclick', {});
+        }
+      } else {
+        tapCount = 0;
+        clearTimeout(tapTimer);
+      }
+
+      if (e.touches.length === 0) { lastX = null; lastY = null; }
+    }, { passive: false });
+
+    function flushMove() {
+      rafPending = false;
+      if ((pendingDx === 0 && pendingDy === 0) || !ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ dx: Math.round(pendingDx), dy: Math.round(pendingDy) }));
+      pendingDx = 0; pendingDy = 0;
+    }
+
+    // --- Audio Streaming ---
+    let audioWs = null;
+    let audioCtx = null;
+    let isStreaming = false;
+    let nextPlayTime = 0;
+    let REAL_RATE = 48000;
+    let CHANNELS = 2;
+    const audioBtn = document.getElementById('audio-btn');
+
+    function toggleAudio() {
+      isStreaming ? stopAudio() : startAudio();
+    }
+
+    function startAudio() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioCtx({ latencyHint: 'interactive' });
+      log('Created, state: ' + audioCtx.state);
+
+      const warmup = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+      const src = audioCtx.createBufferSource();
+      src.buffer = warmup;
+      src.connect(audioCtx.destination);
+      src.start(0);
+
+      audioCtx.resume().then(() => {
+        log('State after resume: ' + audioCtx.state);
+
+        fetch(BASE_HTTP + '/audio/info')
+          .then(r => r.json())
+          .then(info => {
+            log('Info: ' + JSON.stringify(info));
+            REAL_RATE = info.sampleRate;
+            CHANNELS = info.channels;
+            log('Actual ctx rate: ' + audioCtx.sampleRate);
+            nextPlayTime = audioCtx.currentTime;
+
+            audioWs = new WebSocket(BASE_WS + '/ws/audio');
+            audioWs.binaryType = 'arraybuffer';
+
+            audioWs.onopen = () => {
+              log('WS open ✅');
+              isStreaming = true;
+              audioBtn.textContent = '🔴 Stop Streaming';
+              audioBtn.classList.add('streaming');
+            };
+
+            audioWs.onerror = () => { log('WS error ❌'); stopAudio(); };
+            audioWs.onclose = e => { log('WS closed: code=' + e.code); stopAudio(); };
+
+            let msgCount = 0;
+            audioWs.onmessage = e => {
+              msgCount++;
+              if (msgCount <= 3) log('MSG #' + msgCount + ' size=' + e.data.byteLength);
+              if (audioCtx.state === 'suspended') audioCtx.resume();
+
+              const pcm16 = new Int16Array(e.data);
+              const frameCount = pcm16.length / CHANNELS;
+              const actualRate = audioCtx.sampleRate;
+              const audioBuffer = audioCtx.createBuffer(CHANNELS, frameCount, actualRate);
+
+              for (let ch = 0; ch < CHANNELS; ch++) {
+                const channelData = audioBuffer.getChannelData(ch);
+                for (let i = 0; i < frameCount; i++) {
+                  channelData[i] = pcm16[i * CHANNELS + ch] / 32767;
+                }
+              }
+
+              const source = audioCtx.createBufferSource();
+              source.buffer = audioBuffer;
+              source.connect(audioCtx.destination);
+              const now = audioCtx.currentTime;
+              if (nextPlayTime < now) nextPlayTime = now + 0.001;
+              source.start(nextPlayTime);
+              nextPlayTime += audioBuffer.duration;
+            };
+          })
+          .catch(err => { log('Fetch ERROR: ' + err); stopAudio(); });
+      });
+    }
+
+    function stopAudio() {
+      isStreaming = false;
+      audioBtn.textContent = '🔈 Stream PC Audio';
+      audioBtn.classList.remove('streaming');
+      if (audioWs) { audioWs.close(); audioWs = null; }
+      if (audioCtx) { audioCtx.close(); audioCtx = null; }
+      nextPlayTime = 0;
+    }
+  </script>
+
+</body>
+</html>
